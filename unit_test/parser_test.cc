@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "parser.h"
 
 #include <iostream>
@@ -6,7 +8,7 @@
 
 using namespace pp_expr;
 
-int main(int argc, char** argv)
+TEST(parser, test_unary)
 {
     {
         std::vector<Token> tokens = {
@@ -20,7 +22,7 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- a)");
+        EXPECT_EQ(ast_str, "(- a)");
     }
     {
         std::vector<Token> tokens = {
@@ -34,8 +36,12 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- 10)");
+        EXPECT_EQ(ast_str, "(- 10)");
     }
+}
+
+TEST(parser, test_binary_arith)
+{
     {
         /// 3 + 4 - 5 - 6
         /// ((3 + 4) - 5) - 6
@@ -55,8 +61,12 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- (- (+ 3 4) 5) 6)");
+        EXPECT_EQ(ast_str, "(- (- (+ 3 4) 5) 6)");
     }
+}
+
+TEST(parser, test_parenthese_group)
+{
     {
         /// 3 + (4 - 5) - 6
         std::vector<Token> tokens = {
@@ -77,8 +87,12 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- (+ 3 (- 4 5)) 6)");
+        EXPECT_EQ(ast_str, "(- (+ 3 (- 4 5)) 6)");
     }
+}
+
+TEST(parser, test_prefix_postfix_unary)
+{
     {
         /// -+*&++---a
         /// - + * & ++ -- -a
@@ -99,7 +113,7 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- (+ (* (& (++ (-- (- a)))))))");
+        EXPECT_EQ(ast_str, "(- (+ (* (& (++ (-- (- a)))))))");
     }
     {
         /// -a+b
@@ -117,7 +131,7 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(+ (- a) b)");
+        EXPECT_EQ(ast_str, "(+ (- a) b)");
     }
     {
         /// -+*&++---a+b
@@ -141,8 +155,12 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(+ (- (+ (* (& (++ (-- (- a))))))) b)");
+        EXPECT_EQ(ast_str, "(+ (- (+ (* (& (++ (-- (- a))))))) b)");
     }
+}
+
+TEST(parser, test_assignment)
+{
     {
         std::vector<Token> tokens = {
             { TOK_MINUS, "-" },
@@ -164,8 +182,31 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(= (- (+ a)) (&& (== b 10) (> c 30)))");
+        EXPECT_EQ(ast_str, "(= (- (+ a)) (&& (== b 10) (> c 30)))");
     }
+    {
+        /// a = b = c
+        /// a = (b = c)
+        std::vector<Token> tokens = {
+            { TOK_ID, "a" },
+            { TOK_ASSIGN, "=" },
+            { TOK_ID, "b" },
+            { TOK_ASSIGN, "=" },
+            { TOK_ID, "c" },
+        };
+
+        Parser parser(tokens);
+        auto ast = parser.parse();
+        std::ostringstream ostr;
+        ostr << *ast;
+        std::string ast_str = ostr.str();
+        std::cerr << "AST:\n" << ast_str << "\n";
+        EXPECT_EQ(ast_str, "(= a (= b c))");
+    }
+}
+
+TEST(parser, test_tenary_op)
+{
     {
         /// -+a = b == 10? c > 30 : d != 80
         /// (-(+a)) = ((b==10) ? (c>30) : (d!=80))
@@ -193,7 +234,7 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(= (- (+ a)) (? (== b 10) (> c 30) (!= d 80)))");
+        EXPECT_EQ(ast_str, "(= (- (+ a)) (? (== b 10) (> c 30) (!= d 80)))");
     }
 
     {
@@ -224,8 +265,35 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(= (* (++ (a ++))) (? (== i 0) (+ 2 3) (* 4 5)))");
+        EXPECT_EQ(ast_str, "(= (* (++ (a ++))) (? (== i 0) (+ 2 3) (* 4 5)))");
     }
+    {
+        /// a ? b ? c : d : e
+        /// a ? (b ? c : d) : e
+        std::vector<Token> tokens = {
+            { TOK_ID, "a" },
+            { TOK_QUESTION, "?" },
+            { TOK_ID, "b" },
+            { TOK_QUESTION, "?" },
+            { TOK_ID, "c" },
+            { TOK_COLON, ":" },
+            { TOK_ID, "d" },
+            { TOK_COLON, ":" },
+            { TOK_ID, "e" },
+        };
+
+        Parser parser(tokens);
+        auto ast = parser.parse();
+        std::ostringstream ostr;
+        ostr << *ast;
+        std::string ast_str = ostr.str();
+        std::cerr << "AST:\n" << ast_str << "\n";
+        EXPECT_EQ(ast_str, "(? a (? b c d) e)");
+    }
+}
+
+TEST(parser, test_indexing)
+{
     {
         /// -a[10][1]+b
         /// - (a[10][1]) + b
@@ -248,7 +316,7 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(+ (- ([ ([ a 10) 1)) b)");
+        EXPECT_EQ(ast_str, "(+ (- ([ ([ a 10) 1)) b)");
     }
     {
         /// -a[10]--
@@ -268,17 +336,18 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(- (([ a 10) --))");
+        EXPECT_EQ(ast_str, "(- (([ a 10) --))");
     }
     {
-        /// a = b = c
-        /// a = (b = c)
+        /// a[1+3]
+        /// a[(1+3)]
         std::vector<Token> tokens = {
             { TOK_ID, "a" },
-            { TOK_ASSIGN, "=" },
-            { TOK_ID, "b" },
-            { TOK_ASSIGN, "=" },
-            { TOK_ID, "c" },
+            { TOK_LSQUAR, "[" },
+            { TOK_NUM, "1" },
+            { TOK_PLUS, "+" },
+            { TOK_NUM, "3" },
+            { TOK_RSQUAR, "]" },
         };
 
         Parser parser(tokens);
@@ -287,6 +356,6 @@ int main(int argc, char** argv)
         ostr << *ast;
         std::string ast_str = ostr.str();
         std::cerr << "AST:\n" << ast_str << "\n";
-        assert(ast_str == "(= a (= b c))");
+        EXPECT_EQ(ast_str, "([ a (+ 1 3))");
     }
 }

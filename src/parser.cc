@@ -74,9 +74,9 @@ static Expr_t parse_binary_expr_right(Parser& parser, const Token& op_token, con
 
 static Expr_t parse_question_expr(Parser& parser, const Token& op_token, const Expr_t& left)
 {
-    auto true_expr = parser.parse_expr(get_precedence(op_token.token_type));
+    auto true_expr = parser.parse_expr(0);
     parser.consume(TOK_COLON);
-    auto false_expr = parser.parse_expr(get_precedence(op_token.token_type));
+    auto false_expr = parser.parse_expr(0);
     return MakeExpr<TenaryExpr>(
         op_token,
         left,
@@ -91,7 +91,7 @@ static Expr_t parse_lsquar_expr(Parser& parser, const Token& op_token, const Exp
     auto expr = MakeExpr<BinaryExpr>(
         op_token,
         left,
-        parser.parse_expr(get_precedence(op_token.token_type))
+        parser.parse_expr(0)
     );
     parser.consume(TOK_RSQUAR);
     return expr;
